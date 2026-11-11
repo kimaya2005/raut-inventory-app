@@ -10,9 +10,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v13 for Perfect Professional Sticker Labels)
+# DATABASE SETUP (Using v15 for Extra Bold & Clear Product Names)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v13.db"
+DB_NAME = "raut_inventory_v15.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -88,44 +88,49 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate professional sticker-style barcode image
+# Helper function to generate clean, dark, bold sticker labels
 def generate_custom_barcode_image(item_name, barcode_text, company_name):
-    # 1. Generate standard barcode with text below it
+    writer_options = {
+        'module_width': 0.22,
+        'module_height': 7.5,
+        'quiet_zone': 3,
+        'font_size': 8,
+        'text_distance': 2.0
+    }
+
     rv = BytesIO()
-    Code128(barcode_text, writer=ImageWriter()).write(rv)
+    Code128(barcode_text, writer=ImageWriter()).write(rv, options=writer_options)
     rv.seek(0)
     
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    # Create a clean white sticker canvas with extra height at the top for bold product title
-    sticker_height = bh + 130
-    sticker_width = max(bw, 400)
+    sticker_width = 340
+    sticker_height = bh + 110
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
+    draw = ImageDraw.Draw(sticker_img)
     
-    # Load bold fonts if available, otherwise fallback gracefully with scaling
+    # Load fonts with fallback options
     try:
-        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 22)
-        font_sub = ImageFont.truetype("DejaVuSans.ttf", 14)
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 20)
+        font_sub = ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
     except IOError:
         try:
-            font_title = ImageFont.truetype("arial.ttf", 22)
-            font_sub = ImageFont.truetype("arial.ttf", 14)
+            font_title = ImageFont.truetype("arialbd.ttf", 20)
+            font_sub = ImageFont.truetype("arialbd.ttf", 12)
         except IOError:
             font_title = ImageFont.load_default()
             font_sub = ImageFont.load_default()
 
-    draw = ImageDraw.Draw(sticker_img)
+    # Draw dark, bold text so it prints clearly on physical products
+    draw.text((12, 10), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.text((12, 38), f"{company_name.upper()}", fill="black", font=font_sub)
+    draw.line([(12, 56), (sticker_width - 12, 56)], fill="black", width=2)
     
-    # Draw Product Name and Company cleanly centered or aligned like reference sticker
-    draw.text((20, 15), f"{item_name.upper()}", fill="black", font=font_title)
-    draw.text((20, 48), f"{company_name}", fill="gray", font=font_sub)
-    draw.line([(20, 75), (sticker_width - 20, 75)], fill="black", width=2)
-    
-    # Center paste barcode image below the header
-    x_offset = (sticker_width - bw) // 2
-    sticker_img.paste(barcode_img, (x_offset, 85))
+    # Center paste barcode image
+    x_offset = max(0, (sticker_width - bw) // 2)
+    sticker_img.paste(barcode_img, (x_offset, 62))
     
     final_io = BytesIO()
     sticker_img.save(final_io, format="PNG")
@@ -160,7 +165,7 @@ def generate_barcode_pdf(item_name, barcode_id, company_name):
     with open(temp_img_path, "wb") as f:
         f.write(img_io.read())
 
-    story.append(RLImage(temp_img_path, width=320, height=180))
+    story.append(RLImage(temp_img_path, width=280, height=140))
     story.append(Spacer(1, 10))
     story.append(Paragraph(f"<b>Barcode No: {barcode_id}</b>", styles['Heading2']))
 
@@ -247,7 +252,7 @@ else:
     # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes professional sticker format mein hain jinke upar bold product name print hai.")
+        st.write("Yahan saare saved barcodes dark bold product name ke sath dikh rahe hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -275,7 +280,7 @@ else:
                 with st.container():
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
-                        st.image(custom_barcode_io, width=400)
+                        st.image(custom_barcode_io, width=320)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
@@ -299,7 +304,7 @@ else:
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
         st.title("📂 App Downloaded History (Shared with Employees)")
-        st.write("Yahan aap aur aapke employees dekh sakte hain ki kaunse barcodes save/download kiye gaye hain.")
+        st.write("Yahan aap aur aapke employees dekh sakte hain ki kaunse barcodes save kiye gaye hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -310,7 +315,7 @@ else:
         conn.close()
 
         if history_df.empty:
-            st.info("Abhi tak app ke andar koi barcode download/save nahi kiya gaya hai.")
+            st.info("Abhi tak app ke andar koi barcode save nahi kiya gaya hai.")
         else:
             for _, row in history_df.iterrows():
                 h_id = row['id']
@@ -327,7 +332,7 @@ else:
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode, h_company)
-                        st.image(custom_io, width=350)
+                        st.image(custom_io, width=280)
                     except Exception:
                         pass
                     
@@ -367,7 +372,7 @@ else:
     # --- SECTION 4: MANAGE & EDIT ---
     elif menu == "⚙️ Manage & Edit Inventory":
         st.title("⚙️ Manage Inventory (Rename / Delete)")
-        st.write("Yahan se aap kisi bhi product ka naam badal (rename) sakte hain ya record delete kar sakte hain.")
+        st.write("Yahan से aap kisi bhi product ka naam badal (rename) sakte hain ya record delete kar sakte hain.")
         st.markdown("---")
 
         conn = get_db_connection()
