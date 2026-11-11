@@ -5,14 +5,11 @@ from barcode import Code128
 from barcode.writer import ImageWriter
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v17 for Dual Download Options)
+# DATABASE SETUP (Using v19 for Clean Scanner-Ready Labels)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v17.db"
+DB_NAME = "raut_inventory_v19.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -36,8 +33,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_name TEXT UNIQUE NOT NULL,
-            barcode_id TEXT UNIQUE NOT NULL,
-            company_name TEXT DEFAULT 'Raut Enterprise'
+            barcode_id TEXT UNIQUE NOT NULL
         )
     """
     )
@@ -49,7 +45,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_name TEXT NOT NULL,
             barcode_id TEXT NOT NULL,
-            company_name TEXT NOT NULL,
             downloaded_by TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -76,8 +71,8 @@ def init_db():
     c.execute("SELECT * FROM inventory")
     if not c.fetchone():
         c.execute(
-            "INSERT INTO inventory (item_name, barcode_id, company_name) VALUES (?, ?, ?)",
-            ("10 no nut - 1/2 inch", "RT-0000000000001", "Raut Enterprise"),
+            "INSERT INTO inventory (item_name, barcode_id) VALUES (?, ?)",
+            ("10 no nut - 1/2 inch", "RT-0000000000001"),
         )
 
     conn.commit()
@@ -88,11 +83,12 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate clean sticker barcode without overlaps
-def generate_custom_barcode_image(item_name, barcode_text, company_name):
+# Helper function to generate scanner-friendly barcode image with ONLY Product Name
+def generate_custom_barcode_image(item_name, barcode_text):
+    # Completely disable library text to ensure scanner gun reads code cleanly
     writer_options = {
-        'module_width': 0.25,
-        'module_height': 12.0,
+        'module_width': 0.28,
+        'module_height': 14.0,
         'quiet_zone': 4,
         'write_text': False
     }
@@ -104,38 +100,36 @@ def generate_custom_barcode_image(item_name, barcode_text, company_name):
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    sticker_width = max(bw + 40, 360)
-    sticker_height = bh + 95
+    # Sticker dimensions (Compact & Professional)
+    sticker_width = max(bw + 50, 380)
+    sticker_height = bh + 85  # Space for product name at top and barcode number at bottom
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
     draw = ImageDraw.Draw(sticker_img)
     
+    # Load fonts safely
     try:
-        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
-        font_sub = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
-        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 13)
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 20)
+        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 15)
     except IOError:
         try:
-            font_title = ImageFont.truetype("arialbd.ttf", 18)
-            font_sub = ImageFont.truetype("arialbd.ttf", 11)
-            font_code = ImageFont.truetype("arialbd.ttf", 13)
+            font_title = ImageFont.truetype("arialbd.ttf", 20)
+            font_code = ImageFont.truetype("arialbd.ttf", 15)
         except IOError:
             font_title = ImageFont.load_default()
-            font_sub = ImageFont.load_default()
             font_code = ImageFont.load_default()
 
-    # 1. Draw Product Name & Company at top
-    draw.text((15, 8), f"{item_name.upper()}", fill="black", font=font_title)
-    draw.text((15, 32), f"{company_name.upper()}", fill="black", font=font_sub)
-    draw.line([(15, 48), (sticker_width - 15, 48)], fill="black", width=2)
+    # 1. Draw ONLY Product Name at the top (No Company Name)
+    draw.text((15, 10), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.line([(15, 38), (sticker_width - 15, 38)], fill="black", width=2)
     
-    # 2. Paste Barcode lines in middle
+    # 2. Paste Barcode lines in middle (100% readable by scanner gun)
     x_offset = (sticker_width - bw) // 2
-    y_offset = 54
+    y_offset = 44
     sticker_img.paste(barcode_img, (x_offset, y_offset))
     
-    # 3. Draw Barcode Number cleanly at bottom
-    code_y = y_offset + bh + 6
+    # 3. Draw Barcode Number neatly at the bottom with zero overlap
+    code_y = y_offset + bh + 10
     draw.text((sticker_width // 2, code_y), barcode_text, fill="black", font=font_code, anchor="mm")
     
     final_io = BytesIO()
@@ -230,14 +224,14 @@ else:
             ]
         )
 
-    # --- SECTION 1: APP STORAGE & DUAL DOWNLOAD OPTIONS ---
+    # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes hain. Aap dono mein se koi bhi download option chun sakte hain.")
+        st.write("Yahan saare saved barcodes hain. Barcode ke upar sirf product name hai aur ye scanner machine se easily read honge.")
         st.markdown("---")
 
         conn = get_db_connection()
-        df = pd.read_sql_query("SELECT id, item_name, barcode_id, company_name FROM inventory ORDER BY id DESC", conn)
+        df = pd.read_sql_query("SELECT id, item_name, barcode_id FROM inventory ORDER BY id DESC", conn)
         conn.close()
 
         if df.empty:
@@ -256,27 +250,25 @@ else:
                 item_id = row['id']
                 item_name = row['item_name']
                 barcode_id = row['barcode_id']
-                company_name = row['company_name']
 
                 with st.container():
                     try:
-                        custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
-                        st.image(custom_barcode_io, width=320)
+                        custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id)
+                        st.image(custom_barcode_io, width=340)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
-                    # DUAL DOWNLOAD OPTIONS BUTTONS
+                    # DUAL DOWNLOAD BUTTONS
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        # Option 1: Save inside App for Employees to see
                         if st.button(f"📥 Save to App History", key=f"save_app_{item_id}"):
                             try:
                                 conn = get_db_connection()
                                 c = conn.cursor()
                                 c.execute(
-                                    "INSERT INTO downloaded_history (item_name, barcode_id, company_name, downloaded_by) VALUES (?, ?, ?, ?)",
-                                    (item_name, barcode_id, company_name, st.session_state.username)
+                                    "INSERT INTO downloaded_history (item_name, barcode_id, downloaded_by) VALUES (?, ?, ?)",
+                                    (item_name, barcode_id, st.session_state.username)
                                 )
                                 conn.commit()
                                 conn.close()
@@ -285,9 +277,8 @@ else:
                                 st.error(f"Error: {e}")
 
                     with col2:
-                        # Option 2: Download directly to user's local device for printing
                         try:
-                            local_img_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
+                            local_img_io = generate_custom_barcode_image(item_name, barcode_id)
                             st.download_button(
                                 label="💾 Download to Device",
                                 data=local_img_io,
@@ -309,7 +300,7 @@ else:
 
         conn = get_db_connection()
         history_df = pd.read_sql_query(
-            "SELECT id, item_name, barcode_id, company_name, downloaded_by, timestamp FROM downloaded_history ORDER BY id DESC", 
+            "SELECT id, item_name, barcode_id, downloaded_by, timestamp FROM downloaded_history ORDER BY id DESC", 
             conn
         )
         conn.close()
@@ -321,18 +312,17 @@ else:
                 h_id = row['id']
                 h_name = row['item_name']
                 h_barcode = row['barcode_id']
-                h_company = row['company_name']
                 h_user = row['downloaded_by']
                 h_time = row['timestamp']
 
                 with st.container():
                     st.markdown(f"### 📦 Product: **{h_name}**")
-                    st.write(f"**Barcode ID:** `{h_barcode}` | **Company:** {h_company}")
+                    st.write(f"**Barcode ID:** `{h_barcode}`")
                     st.caption(f"Saved by user: **{h_user}** at {h_time}")
                     
                     try:
-                        custom_io = generate_custom_barcode_image(h_name, h_barcode, h_company)
-                        st.image(custom_io, width=280)
+                        custom_io = generate_custom_barcode_image(h_name, h_barcode)
+                        st.image(custom_io, width=300)
                     except Exception:
                         pass
                     
@@ -341,11 +331,10 @@ else:
     # --- SECTION 3: GENERATE & SAVE NEW ---
     elif menu == "➕ Generate & Save Barcode":
         st.title("➕ Naya Barcode Generate Karein")
-        st.write("Item Name dalein. Duplicate items allowed nahi hain.")
+        st.write("Sirf Item Name dalein. Barcode automatic sequential generate hoga.")
 
         with st.form("generate_barcode_form"):
             item_name = st.text_input("Item Name", placeholder="e.g. 12 no nut - 1 inch")
-            company_name = st.text_input("Company Name", value="Raut Enterprise")
             
             save_btn = st.form_submit_button("Generate & Save to App")
 
@@ -357,8 +346,8 @@ else:
                         conn = get_db_connection()
                         c = conn.cursor()
                         c.execute(
-                            "INSERT INTO inventory (item_name, barcode_id, company_name) VALUES (?, ?, ?)",
-                            (item_name.strip(), auto_barcode_id, company_name),
+                            "INSERT INTO inventory (item_name, barcode_id) VALUES (?, ?)",
+                            (item_name.strip(), auto_barcode_id),
                         )
                         conn.commit()
                         conn.close()
@@ -390,13 +379,12 @@ else:
 
             conn = get_db_connection()
             c = conn.cursor()
-            c.execute("SELECT item_name, barcode_id, company_name FROM inventory WHERE id = ?", (selected_id,))
-            curr_name, curr_barcode, curr_company = c.fetchone()
+            c.execute("SELECT item_name, barcode_id FROM inventory WHERE id = ?", (selected_id,))
+            curr_name, curr_barcode = c.fetchone()
             conn.close()
 
             with st.form("edit_delete_form"):
                 new_name = st.text_input("Rename Product Name", value=curr_name)
-                new_company = st.text_input("Company Name", value=curr_company)
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -410,12 +398,12 @@ else:
                             conn = get_db_connection()
                             c = conn.cursor()
                             c.execute(
-                                "UPDATE inventory SET item_name = ?, company_name = ? WHERE id = ?",
-                                (new_name.strip(), new_company, selected_id)
+                                "UPDATE inventory SET item_name = ? WHERE id = ?",
+                                (new_name.strip(), selected_id)
                             )
                             conn.commit()
                             conn.close()
-                            st.success("✅ Product details successfully updated / renamed!")
+                            st.success("✅ Product name successfully updated / renamed!")
                             st.rerun()
                         except sqlite3.IntegrityError:
                             st.error("⚠️ Yeh product name pehle se exist karta hai.")
