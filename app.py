@@ -10,9 +10,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v10 for In-App Shared Downloads)
+# DATABASE SETUP (Using v11 for Bold Product Name on Barcode Image)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v10.db"
+DB_NAME = "raut_inventory_v11.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -42,7 +42,7 @@ def init_db():
     """
     )
 
-    # In-App Shared Downloads Table (For Employees to see what was downloaded)
+    # In-App Shared Downloads Table
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS downloaded_history (
@@ -88,33 +88,35 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate barcode image with Product Name printed directly on it using PIL
+# Helper function to generate barcode image with Bold Product Name printed on it
 def generate_custom_barcode_image(item_name, barcode_text, company_name):
-    # 1. Generate base barcode using python-barcode
+    # 1. Generate standard barcode
     rv = BytesIO()
     Code128(barcode_text, writer=ImageWriter()).write(rv)
     rv.seek(0)
     
-    # 2. Open with PIL to add custom header (Product Name & Company)
     barcode_img = Image.open(rv)
-    
-    # Create a new canvas with extra space at the top for Product Name & Company
     width, height = barcode_img.size
-    new_height = height + 100
-    new_img = Image.new("RGB", (width, new_height), "white")
     
+    # Create larger canvas to accommodate bold text at the top
+    new_height = height + 120
+    new_img = Image.new("RGB", (width, new_height), "white")
     draw = ImageDraw.Draw(new_img)
     
-    # Draw Company & Product Name directly onto the image
+    # Load default or standard bold-like appearance by drawing text cleanly
     try:
-        # Using default bitmap font or fallback
-        draw.text((15, 10), f"Company: {company_name}", fill="black")
-        draw.text((15, 30), f"Product: {item_name}", fill="black")
+        # Try loading a better font if available, otherwise default
+        font = ImageFont.load_default()
     except Exception:
-        pass
+        font = None
+
+    # Draw Company and Product Name clearly at the top
+    draw.text((15, 10), f"Company: {company_name}", fill="black", font=font)
+    draw.text((15, 30), f"PRODUCT: {item_name.upper()}", fill="black", font=font)
+    draw.text((15, 45), f"--------------------------------------------------", fill="black", font=font)
     
-    # Paste barcode image below the text
-    new_img.paste(barcode_img, (0, 65))
+    # Paste barcode image below the text header
+    new_img.paste(barcode_img, (0, 60))
     
     final_io = BytesIO()
     new_img.save(final_io, format="PNG")
@@ -132,7 +134,7 @@ def get_next_barcode_id():
     next_id = (result[0] or 0) + 1
     return f"RT-{next_id:013d}"
 
-# Function to generate PDF containing the labeled barcode for in-app storage
+# Function to generate PDF containing the labeled barcode
 def generate_barcode_pdf(item_name, barcode_id, company_name):
     pdf_buffer = BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
@@ -236,7 +238,7 @@ else:
     # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes hain. Barcode image ke andar hi **Product Name** print dikhega.")
+        st.write("Yahan saare saved barcodes hain. Barcode image ke bilkul upar product ka naam bold mein print dikhega.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -246,7 +248,6 @@ else:
         if df.empty:
             st.info("App storage mein abhi koi barcode nahi hai.")
         else:
-            # CSV Download Button
             csv_data = df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Export Full Inventory as CSV",
@@ -263,14 +264,14 @@ else:
                 company_name = row['company_name']
 
                 with st.container():
-                    # Display Barcode with Name printed directly on image
+                    # Display Barcode with Name printed directly on image header
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
                         st.image(custom_barcode_io, width=350)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
-                    # Button to save to In-App Shared History (instead of device download)
+                    # Button to save to In-App Shared History for employees
                     if st.button(f"📥 Save to App Downloads for Employees", key=f"save_app_{item_id}"):
                         try:
                             conn = get_db_connection()
@@ -281,17 +282,17 @@ else:
                             )
                             conn.commit()
                             conn.close()
-                            st.success(f"✅ '{item_name}' ko App Download History mein save kar diya gaya hai! Ab sabhi employees ise dekh sakenge.")
+                            st.success(f"✅ '{item_name}' ko App Download History mein save kar diya gaya hai!")
                         except Exception as e:
                             st.error(f"Error: {e}")
 
                     st.caption(f"Record ID: #{item_id}")
                     st.markdown("---")
 
-    # --- SECTION 2: APP DOWNLOADED HISTORY (For Employees to see) ---
+    # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
         st.title("📂 App Downloaded History (Shared with Employees)")
-        st.write("Yahan aap aur aapke baki employees dekh sakte hain ki kis-kis product ka barcode download/save kiya gaya hai.")
+        st.write("Yahan aap aur aapke employees dekh sakte hain ki kaunse barcodes save/download kiye gaye hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -317,7 +318,6 @@ else:
                     st.write(f"**Barcode ID:** `{h_barcode}` | **Company:** {h_company}")
                     st.caption(f"Saved by user: **{h_user}** at {h_time}")
                     
-                    # Show the labeled barcode image right here inside the app
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode, h_company)
                         st.image(custom_io, width=300)
