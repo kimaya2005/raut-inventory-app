@@ -10,9 +10,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v15 for Extra Bold & Clear Product Names)
+# DATABASE SETUP (Using v17 for Dual Download Options)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v15.db"
+DB_NAME = "raut_inventory_v17.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -88,14 +88,13 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate clean, dark, bold sticker labels
+# Helper function to generate clean sticker barcode without overlaps
 def generate_custom_barcode_image(item_name, barcode_text, company_name):
     writer_options = {
-        'module_width': 0.22,
-        'module_height': 7.5,
-        'quiet_zone': 3,
-        'font_size': 8,
-        'text_distance': 2.0
+        'module_width': 0.25,
+        'module_height': 12.0,
+        'quiet_zone': 4,
+        'write_text': False
     }
 
     rv = BytesIO()
@@ -105,32 +104,39 @@ def generate_custom_barcode_image(item_name, barcode_text, company_name):
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    sticker_width = 340
-    sticker_height = bh + 110
+    sticker_width = max(bw + 40, 360)
+    sticker_height = bh + 95
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
     draw = ImageDraw.Draw(sticker_img)
     
-    # Load fonts with fallback options
     try:
-        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 20)
-        font_sub = ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
+        font_sub = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
+        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 13)
     except IOError:
         try:
-            font_title = ImageFont.truetype("arialbd.ttf", 20)
-            font_sub = ImageFont.truetype("arialbd.ttf", 12)
+            font_title = ImageFont.truetype("arialbd.ttf", 18)
+            font_sub = ImageFont.truetype("arialbd.ttf", 11)
+            font_code = ImageFont.truetype("arialbd.ttf", 13)
         except IOError:
             font_title = ImageFont.load_default()
             font_sub = ImageFont.load_default()
+            font_code = ImageFont.load_default()
 
-    # Draw dark, bold text so it prints clearly on physical products
-    draw.text((12, 10), f"{item_name.upper()}", fill="black", font=font_title)
-    draw.text((12, 38), f"{company_name.upper()}", fill="black", font=font_sub)
-    draw.line([(12, 56), (sticker_width - 12, 56)], fill="black", width=2)
+    # 1. Draw Product Name & Company at top
+    draw.text((15, 8), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.text((15, 32), f"{company_name.upper()}", fill="black", font=font_sub)
+    draw.line([(15, 48), (sticker_width - 15, 48)], fill="black", width=2)
     
-    # Center paste barcode image
-    x_offset = max(0, (sticker_width - bw) // 2)
-    sticker_img.paste(barcode_img, (x_offset, 62))
+    # 2. Paste Barcode lines in middle
+    x_offset = (sticker_width - bw) // 2
+    y_offset = 54
+    sticker_img.paste(barcode_img, (x_offset, y_offset))
+    
+    # 3. Draw Barcode Number cleanly at bottom
+    code_y = y_offset + bh + 6
+    draw.text((sticker_width // 2, code_y), barcode_text, fill="black", font=font_code, anchor="mm")
     
     final_io = BytesIO()
     sticker_img.save(final_io, format="PNG")
@@ -147,31 +153,6 @@ def get_next_barcode_id():
     
     next_id = (result[0] or 0) + 1
     return f"RT-{next_id:013d}"
-
-# Function to generate PDF containing the professional sticker
-def generate_barcode_pdf(item_name, barcode_id, company_name):
-    pdf_buffer = BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-
-    story.append(Paragraph(f"<b>Company:</b> {company_name}", styles['Normal']))
-    story.append(Spacer(1, 10))
-    story.append(Paragraph(f"<b>Product Name:</b> {item_name}", styles['Heading1']))
-    story.append(Spacer(1, 15))
-
-    img_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
-    temp_img_path = "temp_custom_barcode.png"
-    with open(temp_img_path, "wb") as f:
-        f.write(img_io.read())
-
-    story.append(RLImage(temp_img_path, width=280, height=140))
-    story.append(Spacer(1, 10))
-    story.append(Paragraph(f"<b>Barcode No: {barcode_id}</b>", styles['Heading2']))
-
-    doc.build(story)
-    pdf_buffer.seek(0)
-    return pdf_buffer
 
 # ---------------------------------------------------------
 # SESSION STATE MANAGEMENT
@@ -249,10 +230,10 @@ else:
             ]
         )
 
-    # --- SECTION 1: APP STORAGE ---
+    # --- SECTION 1: APP STORAGE & DUAL DOWNLOAD OPTIONS ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes dark bold product name ke sath dikh rahe hain.")
+        st.write("Yahan saare saved barcodes hain. Aap dono mein se koi bhi download option chun sakte hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -284,19 +265,38 @@ else:
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
-                    if st.button(f"📥 Save to App Downloads for Employees", key=f"save_app_{item_id}"):
+                    # DUAL DOWNLOAD OPTIONS BUTTONS
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Option 1: Save inside App for Employees to see
+                        if st.button(f"📥 Save to App History", key=f"save_app_{item_id}"):
+                            try:
+                                conn = get_db_connection()
+                                c = conn.cursor()
+                                c.execute(
+                                    "INSERT INTO downloaded_history (item_name, barcode_id, company_name, downloaded_by) VALUES (?, ?, ?, ?)",
+                                    (item_name, barcode_id, company_name, st.session_state.username)
+                                )
+                                conn.commit()
+                                conn.close()
+                                st.success(f"✅ App History mein save ho gaya!")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                    with col2:
+                        # Option 2: Download directly to user's local device for printing
                         try:
-                            conn = get_db_connection()
-                            c = conn.cursor()
-                            c.execute(
-                                "INSERT INTO downloaded_history (item_name, barcode_id, company_name, downloaded_by) VALUES (?, ?, ?, ?)",
-                                (item_name, barcode_id, company_name, st.session_state.username)
+                            local_img_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
+                            st.download_button(
+                                label="💾 Download to Device",
+                                data=local_img_io,
+                                file_name=f"{item_name}_{barcode_id}.png",
+                                mime="image/png",
+                                key=f"download_device_{item_id}"
                             )
-                            conn.commit()
-                            conn.close()
-                            st.success(f"✅ '{item_name}' ko App Download History mein save kar diya gaya hai!")
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            st.error(f"Download error: {e}")
 
                     st.caption(f"Record ID: #{item_id}")
                     st.markdown("---")
@@ -304,7 +304,7 @@ else:
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
         st.title("📂 App Downloaded History (Shared with Employees)")
-        st.write("Yahan aap aur aapke employees dekh sakte hain ki kaunse barcodes save kiye gaye hain.")
+        st.write("Yahan aap aur aapke employees dekh sakte hain ki kaunse barcodes app ke andar save kiye gaye hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -372,7 +372,7 @@ else:
     # --- SECTION 4: MANAGE & EDIT ---
     elif menu == "⚙️ Manage & Edit Inventory":
         st.title("⚙️ Manage Inventory (Rename / Delete)")
-        st.write("Yahan से aap kisi bhi product ka naam badal (rename) sakte hain ya record delete kar sakte hain.")
+        st.write("Yahan se aap kisi bhi product ka naam badal (rename) sakte hain ya record delete kar sakte hain.")
         st.markdown("---")
 
         conn = get_db_connection()
