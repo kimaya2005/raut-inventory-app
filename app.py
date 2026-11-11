@@ -1,10 +1,13 @@
 import sqlite3
 import streamlit as st
+from barcode import Code128
+from barcode.writer import ImageWriter
+from io import BytesIO
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v4 to completely avoid old file conflict)
+# DATABASE SETUP (Using v6 for Sequential 13-Digit Barcodes)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v4.db"
+DB_NAME = "raut_inventory_v6.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -22,7 +25,7 @@ def init_db():
     """
     )
 
-    # Inventory Table (App internal storage for items and barcodes)
+    # Inventory Table
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS inventory (
@@ -50,12 +53,12 @@ def init_db():
             ("employee", "emp123", "Employee"),
         )
 
-    # Sample Data
+    # Sample Data (13-digit sequential format)
     c.execute("SELECT * FROM inventory")
     if not c.fetchone():
         c.execute(
             "INSERT INTO inventory (item_name, barcode_id, company_name) VALUES (?, ?, ?)",
-            ("10 no nut - 1/2 inch", "RT-000000000001", "Raut Enterprise"),
+            ("10 no nut - 1/2 inch", "0000000000001", "Raut Enterprise"),
         )
 
     conn.commit()
@@ -65,6 +68,25 @@ init_db()
 
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
+
+# Helper function to generate automatic barcode image
+def generate_barcode_image(barcode_text):
+    rv = BytesIO()
+    Code128(barcode_text, writer=ImageWriter()).write(rv)
+    rv.seek(0)
+    return rv
+
+# Function to generate next 13-digit sequential barcode
+def get_next_barcode_id():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT MAX(id) FROM inventory")
+    result = c.fetchone()
+    conn.close()
+    
+    next_id = (result[0] or 0) + 1
+    # Format as 13 digits with leading zeros (e.g., 0000000000001)
+    return f"{next_id:013d}"
 
 # ---------------------------------------------------------
 # SESSION STATE MANAGEMENT
@@ -134,7 +156,7 @@ else:
     # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Jitne bhi Barcodes generate hue hain, sab is app ke andar permanently saved hain.")
+        st.write("Yahan sabhi items ke barcodes dekh sakte hain. Barcode ke upar **Product Name** aur niche **13-Digit Barcode Number** bold mein dikhega.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -148,46 +170,58 @@ else:
         else:
             for item_id, item_name, barcode_id, company_name in items:
                 with st.container():
-                    st.subheader(f"📦 {item_name}")
-                    st.write(f"**Barcode ID:** `{barcode_id}`")
-                    st.write(f"**Company:** {company_name}")
-                    st.caption(f"Stored in App Database | Record ID: #{item_id}")
+                    # Product name bold above barcode
+                    st.markdown(f"### 📦 Product: **{item_name}**")
+                    st.write(f"Company: {company_name}")
+                    
+                    # Generate and display barcode image
+                    try:
+                        barcode_io = generate_barcode_image(barcode_id)
+                        st.image(barcode_io, width=300)
+                    except Exception as e:
+                        st.error(f"Barcode render error: {e}")
+
+                    # Barcode number bold below image
+                    st.markdown(f"**Barcode No: `{barcode_id}`**")
+                    st.caption(f"Record ID: #{item_id}")
                     st.markdown("---")
 
-    # --- SECTION 2: GENERATE & SAVE ---
+    # --- SECTION 2: GENERATE & SAVE (Sequential 13-Digit Barcode) ---
     elif menu == "➕ Generate & Save Barcode":
         st.title("➕ Naya Barcode Generate Karein")
-        st.write("Yahan naya Item add karke **Save** karein. Yeh sidhe App Storage me save ho jayega.")
+        st.write("Sirf **Item Name** likhein, agla sequential 13-digit barcode automatic assign ho jayega.")
 
         with st.form("generate_barcode_form"):
             item_name = st.text_input("Item Name", placeholder="e.g. 12 no nut - 1 inch")
-            barcode_id = st.text_input("Barcode ID", placeholder="e.g. RT-000000000002")
             company_name = st.text_input("Company Name", value="Raut Enterprise")
             
             save_btn = st.form_submit_button("Generate & Save to App")
 
             if save_btn:
-                if item_name and barcode_id:
+                if item_name:
+                    # Get next sequential 13-digit barcode
+                    auto_barcode_id = get_next_barcode_id()
+
                     try:
                         conn = get_db_connection()
                         c = conn.cursor()
                         c.execute(
                             "INSERT INTO inventory (item_name, barcode_id, company_name) VALUES (?, ?, ?)",
-                            (item_name, barcode_id, company_name),
+                            (item_name, auto_barcode_id, company_name),
                         )
                         conn.commit()
                         conn.close()
-                        st.success(f"✅ Barcode '{barcode_id}' app ke storage me successfully save ho gaya hai!")
+                        st.success(f"✅ Product '{item_name}' aur 13-digit Barcode '{auto_barcode_id}' successfully save ho gaya hai!")
                         st.rerun()
                     except sqlite3.IntegrityError:
-                        st.error("⚠️ Yeh Barcode ID pehle se App me saved hai. Dusra ID dalein.")
+                        st.error("⚠️ Yeh Barcode ID pehle se exist karti hai. Dobara try karein.")
                 else:
-                    st.warning("Kripya Item Name aur Barcode ID dono bharein.")
+                    st.warning("Kripya Item Name zaroor bharein.")
 
     # --- SECTION 3: CHANGE EMPLOYEE PASSWORD ---
     elif menu == "⚙️ Change Employee Password":
         st.title("⚙️ Employee Access Control")
-        st.write("Jab koi employee job chhod de, toh yahan se password badal dein taaki purana staff login na kar sake.")
+        st.write("Jab koi employee job chhod de, toh yahan se password badal dein.")
         st.markdown("---")
 
         with st.form("change_pass_form"):
