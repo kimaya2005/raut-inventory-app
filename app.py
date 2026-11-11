@@ -7,9 +7,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v21 for Ultra Clear, Bold & Professional Stickers)
+# DATABASE SETUP (Using v22 for High-Res Bold & Clear Stickers)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v21.db"
+DB_NAME = "raut_inventory_v22.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -83,12 +83,14 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate large, bold, highly visible sticker image
+# Helper function using High-Resolution Scaling for bold & clear product sticker
 def generate_custom_barcode_image(item_name, barcode_text):
+    scale = 2  # High-res multiplier for bold, sharp text rendering
+    
     writer_options = {
-        'module_width': 0.22,
-        'module_height': 12.0,
-        'quiet_zone': 2,
+        'module_width': 0.22 * scale,
+        'module_height': 11.0 * scale,
+        'quiet_zone': 3 * scale,
         'write_text': False
     }
 
@@ -99,37 +101,42 @@ def generate_custom_barcode_image(item_name, barcode_text):
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    # Sticker dimensions with adequate height for large bold text
-    sticker_width = max(bw + 40, 360)
-    sticker_height = bh + 95
+    # Large canvas for high-res drawing
+    sticker_width = max(bw + 40 * scale, 360 * scale)
+    sticker_height = bh + 90 * scale
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
     draw = ImageDraw.Draw(sticker_img)
     
-    # Load large bold fonts safely
+    # Scaled font sizes for ultimate boldness
     try:
-        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 24)
-        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 16)
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 32 * scale)
+        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 22 * scale)
     except IOError:
         try:
-            font_title = ImageFont.truetype("arialbd.ttf", 24)
-            font_code = ImageFont.truetype("arialbd.ttf", 16)
+            font_title = ImageFont.truetype("arialbd.ttf", 32 * scale)
+            font_code = ImageFont.truetype("arialbd.ttf", 22 * scale)
         except IOError:
             font_title = ImageFont.load_default()
             font_code = ImageFont.load_default()
 
     # 1. Draw Large Bold Product Name at the top
-    draw.text((15, 8), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.text((15 * scale, 10 * scale), f"{item_name.upper()}", fill="black", font=font_title)
     
     # 2. Paste Barcode lines in middle
     x_offset = max(0, (sticker_width - bw) // 2)
-    y_offset = 38
+    y_offset = 45 * scale
     sticker_img.paste(barcode_img, (x_offset, y_offset))
     
     # 3. Draw Barcode Number cleanly with spacing at the bottom
-    spaced_barcode = " ".join(list(barcode_text))
-    code_y = y_offset + bh + 10
+    spaced_barcode = "   ".join(list(barcode_text))
+    code_y = y_offset + bh + 12 * scale
     draw.text((sticker_width // 2, code_y), spaced_barcode, fill="black", font=font_code, anchor="mm")
+    
+    # Resize down smoothly for crisp, bold professional finish
+    final_width = sticker_width // scale
+    final_height = sticker_height // scale
+    sticker_img = sticker_img.resize((final_width, final_height), Image.Resampling.LANCZOS)
     
     final_io = BytesIO()
     sticker_img.save(final_io, format="PNG")
@@ -226,7 +233,7 @@ else:
     # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes bade, bold aur clear sticker format mein hain.")
+        st.write("Yahan saare saved barcodes ekdam bold, clear aur high-res sticker format mein hain.")
         st.markdown("---")
 
         conn = get_db_connection()
