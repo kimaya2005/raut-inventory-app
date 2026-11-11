@@ -10,9 +10,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v11 for Bold Product Name on Barcode Image)
+# DATABASE SETUP (Using v13 for Perfect Professional Sticker Labels)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v11.db"
+DB_NAME = "raut_inventory_v13.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -88,38 +88,47 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate barcode image with Bold Product Name printed on it
+# Helper function to generate professional sticker-style barcode image
 def generate_custom_barcode_image(item_name, barcode_text, company_name):
-    # 1. Generate standard barcode
+    # 1. Generate standard barcode with text below it
     rv = BytesIO()
     Code128(barcode_text, writer=ImageWriter()).write(rv)
     rv.seek(0)
     
     barcode_img = Image.open(rv)
-    width, height = barcode_img.size
+    bw, bh = barcode_img.size
     
-    # Create larger canvas to accommodate bold text at the top
-    new_height = height + 120
-    new_img = Image.new("RGB", (width, new_height), "white")
-    draw = ImageDraw.Draw(new_img)
+    # Create a clean white sticker canvas with extra height at the top for bold product title
+    sticker_height = bh + 130
+    sticker_width = max(bw, 400)
     
-    # Load default or standard bold-like appearance by drawing text cleanly
+    sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
+    
+    # Load bold fonts if available, otherwise fallback gracefully with scaling
     try:
-        # Try loading a better font if available, otherwise default
-        font = ImageFont.load_default()
-    except Exception:
-        font = None
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 22)
+        font_sub = ImageFont.truetype("DejaVuSans.ttf", 14)
+    except IOError:
+        try:
+            font_title = ImageFont.truetype("arial.ttf", 22)
+            font_sub = ImageFont.truetype("arial.ttf", 14)
+        except IOError:
+            font_title = ImageFont.load_default()
+            font_sub = ImageFont.load_default()
 
-    # Draw Company and Product Name clearly at the top
-    draw.text((15, 10), f"Company: {company_name}", fill="black", font=font)
-    draw.text((15, 30), f"PRODUCT: {item_name.upper()}", fill="black", font=font)
-    draw.text((15, 45), f"--------------------------------------------------", fill="black", font=font)
+    draw = ImageDraw.Draw(sticker_img)
     
-    # Paste barcode image below the text header
-    new_img.paste(barcode_img, (0, 60))
+    # Draw Product Name and Company cleanly centered or aligned like reference sticker
+    draw.text((20, 15), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.text((20, 48), f"{company_name}", fill="gray", font=font_sub)
+    draw.line([(20, 75), (sticker_width - 20, 75)], fill="black", width=2)
+    
+    # Center paste barcode image below the header
+    x_offset = (sticker_width - bw) // 2
+    sticker_img.paste(barcode_img, (x_offset, 85))
     
     final_io = BytesIO()
-    new_img.save(final_io, format="PNG")
+    sticker_img.save(final_io, format="PNG")
     final_io.seek(0)
     return final_io
 
@@ -134,7 +143,7 @@ def get_next_barcode_id():
     next_id = (result[0] or 0) + 1
     return f"RT-{next_id:013d}"
 
-# Function to generate PDF containing the labeled barcode
+# Function to generate PDF containing the professional sticker
 def generate_barcode_pdf(item_name, barcode_id, company_name):
     pdf_buffer = BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
@@ -238,7 +247,7 @@ else:
     # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes hain. Barcode image ke bilkul upar product ka naam bold mein print dikhega.")
+        st.write("Yahan saare saved barcodes professional sticker format mein hain jinke upar bold product name print hai.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -264,14 +273,12 @@ else:
                 company_name = row['company_name']
 
                 with st.container():
-                    # Display Barcode with Name printed directly on image header
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id, company_name)
-                        st.image(custom_barcode_io, width=350)
+                        st.image(custom_barcode_io, width=400)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
-                    # Button to save to In-App Shared History for employees
                     if st.button(f"📥 Save to App Downloads for Employees", key=f"save_app_{item_id}"):
                         try:
                             conn = get_db_connection()
@@ -320,7 +327,7 @@ else:
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode, h_company)
-                        st.image(custom_io, width=300)
+                        st.image(custom_io, width=350)
                     except Exception:
                         pass
                     
