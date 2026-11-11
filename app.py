@@ -7,9 +7,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v19 for Clean Scanner-Ready Labels)
+# DATABASE SETUP (Using v20 for Compact, Bold & Spaced Stickers)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v19.db"
+DB_NAME = "raut_inventory_v20.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -83,13 +83,13 @@ init_db()
 def get_db_connection():
     return sqlite3.connect(DB_NAME)
 
-# Helper function to generate scanner-friendly barcode image with ONLY Product Name
+# Helper function to generate compact, bold, scanner-ready sticker image
 def generate_custom_barcode_image(item_name, barcode_text):
-    # Completely disable library text to ensure scanner gun reads code cleanly
+    # Compact module width so barcode isn't overly wide
     writer_options = {
-        'module_width': 0.28,
-        'module_height': 14.0,
-        'quiet_zone': 4,
+        'module_width': 0.18,
+        'module_height': 10.0,
+        'quiet_zone': 2,
         'write_text': False
     }
 
@@ -100,37 +100,37 @@ def generate_custom_barcode_image(item_name, barcode_text):
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    # Sticker dimensions (Compact & Professional)
-    sticker_width = max(bw + 50, 380)
-    sticker_height = bh + 85  # Space for product name at top and barcode number at bottom
+    # Sticker dimensions (Compact & Clean)
+    sticker_width = max(bw + 30, 320)
+    sticker_height = bh + 80
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
     draw = ImageDraw.Draw(sticker_img)
     
-    # Load fonts safely
+    # Load fonts safely with large bold sizing
     try:
-        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 20)
-        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 15)
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 22)
+        font_code = ImageFont.truetype("DejaVuSans-Bold.ttf", 14)
     except IOError:
         try:
-            font_title = ImageFont.truetype("arialbd.ttf", 20)
-            font_code = ImageFont.truetype("arialbd.ttf", 15)
+            font_title = ImageFont.truetype("arialbd.ttf", 22)
+            font_code = ImageFont.truetype("arialbd.ttf", 14)
         except IOError:
             font_title = ImageFont.load_default()
             font_code = ImageFont.load_default()
 
-    # 1. Draw ONLY Product Name at the top (No Company Name)
-    draw.text((15, 10), f"{item_name.upper()}", fill="black", font=font_title)
-    draw.line([(15, 38), (sticker_width - 15, 38)], fill="black", width=2)
+    # 1. Draw Large Bold Product Name at the top
+    draw.text((12, 8), f"{item_name.upper()}", fill="black", font=font_title)
     
-    # 2. Paste Barcode lines in middle (100% readable by scanner gun)
-    x_offset = (sticker_width - bw) // 2
-    y_offset = 44
+    # 2. Paste Barcode lines in middle
+    x_offset = max(0, (sticker_width - bw) // 2)
+    y_offset = 36
     sticker_img.paste(barcode_img, (x_offset, y_offset))
     
-    # 3. Draw Barcode Number neatly at the bottom with zero overlap
-    code_y = y_offset + bh + 10
-    draw.text((sticker_width // 2, code_y), barcode_text, fill="black", font=font_code, anchor="mm")
+    # 3. Draw Barcode Number with clean spacing at the bottom
+    spaced_barcode = "  ".join(list(barcode_text)) # Adds clear space between characters
+    code_y = y_offset + bh + 6
+    draw.text((sticker_width // 2, code_y), spaced_barcode, fill="black", font=font_code, anchor="mm")
     
     final_io = BytesIO()
     sticker_img.save(final_io, format="PNG")
@@ -227,7 +227,7 @@ else:
     # --- SECTION 1: APP STORAGE ---
     if menu == "📦 App Barcode Storage":
         st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes hain. Barcode ke upar sirf product name hai aur ye scanner machine se easily read honge.")
+        st.write("Yahan saare saved barcodes compact, bold aur professional sticker format mein hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -254,7 +254,7 @@ else:
                 with st.container():
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id)
-                        st.image(custom_barcode_io, width=340)
+                        st.image(custom_barcode_io, width=300)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
@@ -322,7 +322,7 @@ else:
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode)
-                        st.image(custom_io, width=300)
+                        st.image(custom_io, width=280)
                     except Exception:
                         pass
                     
