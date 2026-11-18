@@ -7,9 +7,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v41 for Force Logout & Team Access Control)
+# DATABASE SETUP (Using v43 for Compact & Small Product Sticker Size)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v41.db"
+DB_NAME = "raut_inventory_v43.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -79,7 +79,6 @@ def init_db():
     """
     )
 
-    # Check if users exist, if not insert default
     c.execute("SELECT * FROM users WHERE username = ?", ("admin",))
     if not c.fetchone():
         c.execute(
@@ -122,17 +121,17 @@ def log_activity(username, action_type, details):
     except Exception:
         pass
 
-# Helper function: Sticker par sirf Product Name aur Barcode aayega
+# Helper function: Compact and small sticker format optimized for product tagging
 def generate_custom_barcode_image(item_name, barcode_text):
-    scale = 3  # High-res multiplier for crisp printing
+    scale = 2  # Optimized smaller scale for compact product sticker printing
     
     writer_options = {
-        'module_width': 0.35 * scale,
-        'module_height': 15.0 * scale,
-        'quiet_zone': 8 * scale,
+        'module_width': 0.30 * scale,
+        'module_height': 12.0 * scale,
+        'quiet_zone': 6 * scale,
         'write_text': True,
-        'font_size': 14 * scale,
-        'text_distance': 6.0 * scale
+        'font_size': 12 * scale,
+        'text_distance': 5.0 * scale
     }
 
     rv = BytesIO()
@@ -142,8 +141,8 @@ def generate_custom_barcode_image(item_name, barcode_text):
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    header_height = 80 * scale
-    sticker_width = max(bw + 40 * scale, 480 * scale)
+    header_height = 55 * scale
+    sticker_width = max(bw + 30 * scale, 380 * scale)
     sticker_height = bh + header_height
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
@@ -160,22 +159,22 @@ def generate_custom_barcode_image(item_name, barcode_text):
     
     for path in font_paths:
         try:
-            font_title = ImageFont.truetype(path, 28 * scale)
+            font_title = ImageFont.truetype(path, 22 * scale)
             break
         except IOError:
             continue
             
     if not font_title:
         try:
-            font_title = ImageFont.load_default(size=28 * scale)
+            font_title = ImageFont.load_default(size=22 * scale)
         except TypeError:
             font_title = ImageFont.load_default()
 
-    draw.text((25 * scale, 22 * scale), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.text((20 * scale, 15 * scale), f"{item_name.upper()}", fill="black", font=font_title)
     
-    current_y = 62 * scale
-    draw.line([(25 * scale, current_y), (sticker_width - 25 * scale, current_y)], fill="black", width=3 * scale)
-    current_y += 15 * scale
+    current_y = 45 * scale
+    draw.line([(20 * scale, current_y), (sticker_width - 20 * scale, current_y)], fill="black", width=2 * scale)
+    current_y += 10 * scale
     
     x_offset = max(0, (sticker_width - bw) // 2)
     sticker_img.paste(barcode_img, (x_offset, current_y))
@@ -210,7 +209,6 @@ if "logged_in" not in st.session_state:
     st.session_state.username = ""
     st.session_state.role = ""
 
-# Check if user was force-logged out by admin
 if st.session_state.logged_in:
     conn = get_db_connection()
     c = conn.cursor()
@@ -239,7 +237,6 @@ if not st.session_state.logged_in:
         if submit_btn:
             conn = get_db_connection()
             c = conn.cursor()
-            # Reset force_logout flag to 0 upon successful login
             c.execute(
                 "SELECT username, role FROM users WHERE username = ? AND password = ?",
                 (u_input, p_input),
@@ -282,6 +279,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
+                "🖨️ Print Sticker Sheet",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "📜 Activity Audit Logs",
@@ -296,6 +294,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
+                "🖨️ Print Sticker Sheet",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "➕ Generate & Save Barcode", 
@@ -387,7 +386,7 @@ else:
                 with st.container():
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id)
-                        st.image(custom_barcode_io, width=380)
+                        st.image(custom_barcode_io, width=320)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
@@ -424,6 +423,35 @@ else:
 
                     st.caption(f"Record ID: #{item_id} | Price: {price or 'N/A'} | Slot/Cat: {slot_category or 'N/A'}")
                     st.markdown("---")
+
+    # --- SECTION 1.5: PRINT STICKER SHEET ---
+    elif menu == "🖨️ Print Sticker Sheet":
+        st.title("🖨️ Printable Sticker Sheet View")
+        st.write("Yahan se aap ek sath multiple compact stickers dekh sakte hain aur direct printer (Ctrl+P) se print nikal sakte hain.")
+        st.markdown("---")
+
+        conn = get_db_connection()
+        sheet_df = pd.read_sql_query("SELECT id, item_name, barcode_id FROM inventory ORDER BY id DESC", conn)
+        conn.close()
+
+        if sheet_df.empty:
+            st.info("Print karne ke liye koi products nahi hain.")
+        else:
+            st.info("💡 Tip: Is page par aane ke baad apne keyboard par **Ctrl + P** (Windows) ya **Cmd + P** (Mac) dabayein aur print settings mein scale ko chota karke stickers print kar lein!")
+            
+            cols = st.columns(3)
+            for index, row in sheet_df.iterrows():
+                i_name = row['item_name']
+                i_barcode = row['barcode_id']
+                
+                with cols[index % 3]:
+                    try:
+                        sticker_io = generate_custom_barcode_image(i_name, i_barcode)
+                        st.image(sticker_io, width=240)
+                        st.markdown(f"**{i_name.upper()}** (`{i_barcode}`)")
+                        st.markdown("---")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
@@ -466,7 +494,7 @@ else:
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode)
-                        st.image(custom_io, width=340)
+                        st.image(custom_io, width=280)
                     except Exception:
                         pass
                     
@@ -501,7 +529,7 @@ else:
 
                     try:
                         custom_io = generate_custom_barcode_image(t_name, t_barcode)
-                        st.image(custom_io, width=300)
+                        st.image(custom_io, width=280)
                     except Exception:
                         pass
 
@@ -607,7 +635,7 @@ else:
                         
                         try:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
-                            st.image(ex_img_io, width=380)
+                            st.image(ex_img_io, width=320)
                             st.download_button(
                                 label="💾 Download Existing Barcode to Device",
                                 data=ex_img_io,
