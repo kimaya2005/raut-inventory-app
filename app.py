@@ -7,9 +7,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 # ---------------------------------------------------------
-# DATABASE SETUP (Using v43 for Compact & Small Product Sticker Size)
+# DATABASE SETUP (Using Permanent DB Name so data NEVER gets deleted)
 # ---------------------------------------------------------
-DB_NAME = "raut_inventory_v43.db"
+DB_NAME = "raut_enterprise_permanent.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -121,9 +121,9 @@ def log_activity(username, action_type, details):
     except Exception:
         pass
 
-# Helper function: Compact and small sticker format optimized for product tagging
+# Helper function: Optimized for 38mm x 25mm thermal stickers
 def generate_custom_barcode_image(item_name, barcode_text):
-    scale = 2  # Optimized smaller scale for compact product sticker printing
+    scale = 2  
     
     writer_options = {
         'module_width': 0.30 * scale,
@@ -279,7 +279,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Print Sticker Sheet",
+                "🖨️ Print Thermal Sticker (38x25mm)",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "📜 Activity Audit Logs",
@@ -294,7 +294,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Print Sticker Sheet",
+                "🖨️ Print Thermal Sticker (38x25mm)",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "➕ Generate & Save Barcode", 
@@ -386,7 +386,7 @@ else:
                 with st.container():
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id)
-                        st.image(custom_barcode_io, width=320)
+                        st.image(custom_barcode_io, width=280)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
@@ -424,11 +424,26 @@ else:
                     st.caption(f"Record ID: #{item_id} | Price: {price or 'N/A'} | Slot/Cat: {slot_category or 'N/A'}")
                     st.markdown("---")
 
-    # --- SECTION 1.5: PRINT STICKER SHEET ---
-    elif menu == "🖨️ Print Sticker Sheet":
-        st.title("🖨️ Printable Sticker Sheet View")
-        st.write("Yahan se aap ek sath multiple compact stickers dekh sakte hain aur direct printer (Ctrl+P) se print nikal sakte hain.")
+    # --- SECTION 1.5: PRINT 38x25mm THERMAL STICKER ---
+    elif menu == "🖨️ Print Thermal Sticker (38x25mm)":
+        st.title("🖨️ 38mm x Thermal Sticker Direct Print")
+        st.write("Yahan se aap exact 38mm x 25mm size mein stickers print kar sakte hain.")
         st.markdown("---")
+
+        # Inject CSS to force 38mm x 25mm thermal label printing layout
+        st.markdown(
+            """
+            <style>
+            @media print {
+                body { visibility: hidden; }
+                #printable-sticker-area, #printable-sticker-area * { visibility: visible; }
+                #printable-sticker-area { position: absolute; left: 0; top: 0; width: 38mm; height: 25mm; }
+                @page { size: 38mm 25mm; margin: 0; }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
 
         conn = get_db_connection()
         sheet_df = pd.read_sql_query("SELECT id, item_name, barcode_id FROM inventory ORDER BY id DESC", conn)
@@ -437,21 +452,22 @@ else:
         if sheet_df.empty:
             st.info("Print karne ke liye koi products nahi hain.")
         else:
-            st.info("💡 Tip: Is page par aane ke baad apne keyboard par **Ctrl + P** (Windows) ya **Cmd + P** (Mac) dabayein aur print settings mein scale ko chota karke stickers print kar lein!")
+            st.success("🎯 **Ready for 38mm x 25mm Thermal Printing!** Neeche diye gaye button par click karein ya **Ctrl + P** dabayein.")
             
-            cols = st.columns(3)
-            for index, row in sheet_df.iterrows():
+            for _, row in sheet_df.iterrows():
                 i_name = row['item_name']
                 i_barcode = row['barcode_id']
                 
-                with cols[index % 3]:
+                with st.container():
+                    st.markdown(f"### 🏷️ Product: {i_name.upper()}")
                     try:
                         sticker_io = generate_custom_barcode_image(i_name, i_barcode)
-                        st.image(sticker_io, width=240)
-                        st.markdown(f"**{i_name.upper()}** (`{i_barcode}`)")
-                        st.markdown("---")
+                        st.image(sticker_io, width=260)
                     except Exception as e:
                         st.error(f"Error: {e}")
+                    
+                    st.info(f"Barcode ID: `{i_barcode}` | Size: 38mm x 25mm")
+                    st.markdown("---")
 
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
@@ -494,7 +510,7 @@ else:
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode)
-                        st.image(custom_io, width=280)
+                        st.image(custom_io, width=260)
                     except Exception:
                         pass
                     
@@ -529,7 +545,7 @@ else:
 
                     try:
                         custom_io = generate_custom_barcode_image(t_name, t_barcode)
-                        st.image(custom_io, width=280)
+                        st.image(custom_io, width=260)
                     except Exception:
                         pass
 
@@ -635,7 +651,7 @@ else:
                         
                         try:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
-                            st.image(ex_img_io, width=320)
+                            st.image(ex_img_io, width=280)
                             st.download_button(
                                 label="💾 Download Existing Barcode to Device",
                                 data=ex_img_io,
