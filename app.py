@@ -5,6 +5,8 @@ from barcode import Code128
 from barcode.writer import ImageWriter
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
+import base64
+from streamlit.components.v1 import html
 
 # ---------------------------------------------------------
 # DATABASE SETUP (Using Permanent DB Name so data NEVER gets deleted)
@@ -279,7 +281,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Direct Print 38x25mm Sticker",
+                "🖨️ Direct Print / Download 38x25mm",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "📜 Activity Audit Logs",
@@ -294,7 +296,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Direct Print 38x25mm Sticker",
+                "🖨️ Direct Print / Download 38x25mm",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "➕ Generate & Save Barcode", 
@@ -412,7 +414,7 @@ else:
                         try:
                             local_img_io = generate_custom_barcode_image(item_name, barcode_id)
                             st.download_button(
-                                label="💾 Download Device File",
+                                label="💾 Download PNG File",
                                 data=local_img_io,
                                 file_name=f"{item_name}_{barcode_id}.png",
                                 mime="image/png",
@@ -424,10 +426,10 @@ else:
                     st.caption(f"Record ID: #{item_id} | Price: {price or 'N/A'} | Slot/Cat: {slot_category or 'N/A'}")
                     st.markdown("---")
 
-    # --- SECTION 1.5: DIRECT PRINT 38x25mm STICKER ---
-    elif menu == "🖨️ Direct Print 38x25mm Sticker":
-        st.title("🖨️ Direct Print 38x25mm Thermal Sticker")
-        st.write("Yahan se aap kisi bhi 1 product ka exact single sticker browser print dialog ke zariye direct print kar sakte hain (No Paper Waste).")
+    # --- SECTION 1.5: DIRECT PRINT & DOWNLOAD 38x25mm STICKER ---
+    elif menu == "🖨️ Direct Print / Download 38x25mm":
+        st.title("🖨️ Direct Print & Download 38x25mm Thermal Sticker")
+        st.write("Yahan aapke paas dono options hain: Direct Printer se instant print lijiye ya computer mein PNG file download kijiye.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -438,7 +440,7 @@ else:
             st.info("Print karne ke liye koi products nahi hain.")
         else:
             item_dict_p = {f"{row['item_name'].upper()} (ID: {row['barcode_id']})": (row['item_name'], row['barcode_id']) for _, row in p_df.iterrows()}
-            selected_p_str = st.selectbox("Select Product to Print", list(item_dict_p.keys()))
+            selected_p_str = st.selectbox("Select Product", list(item_dict_p.keys()))
             p_name, p_barcode = item_dict_p[selected_p_str]
 
             st.markdown("### 🏷️ Sticker Preview (38mm x 25mm)")
@@ -446,33 +448,49 @@ else:
                 single_img_io = generate_custom_barcode_image(p_name, p_barcode)
                 st.image(single_img_io, width=300)
                 
-                # Convert image to base64 for direct browser window printing
-                import base64
-                img_bytes = single_img_io.getvalue()
-                encoded_img = base64.b64encode(img_bytes).decode('utf-8')
+                st.markdown("---")
+                
+                # Two distinct columns for Download and Direct Print options
+                col_opt1, col_opt2 = st.columns(2)
+                
+                with col_opt1:
+                    st.download_button(
+                        label="💾 Download to Computer",
+                        data=single_img_io,
+                        file_name=f"Sticker_{p_name}_{p_barcode}.png",
+                        mime="image/png",
+                        type="secondary"
+                    )
+                
+                with col_opt2:
+                    img_bytes = single_img_io.getvalue()
+                    encoded_img = base64.b64encode(img_bytes).decode('utf-8')
 
-                print_html = f"""
-                <html>
-                <head>
-                    <style>
-                        @page {{ size: 38mm 25mm; margin: 0; }}
-                        body {{ margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: white; }}
-                        img {{ width: 38mm; height: 25mm; object-fit: contain; }}
-                    </style>
-                </head>
-                <body>
-                    <img src="data:image/png;base64,{encoded_img}" />
-                    <script>
-                        window.onload = function() {{ window.print(); }}
-                    </script>
-                </body>
-                </html>
-                """
+                    print_script_html = f"""
+                    <html>
+                    <head>
+                        <style>
+                            @page {{ size: 38mm 25mm; margin: 0; }}
+                            body {{ margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: white; }}
+                            img {{ width: 38mm; height: 25mm; object-fit: contain; }}
+                        </style>
+                    </head>
+                    <body>
+                        <img id="print_img" src="data:image/png;base64,{encoded_img}" />
+                        <script>
+                            document.getElementById('print_img').onload = function() {{
+                                window.print();
+                            }};
+                        </script>
+                    </body>
+                    </html>
+                    """
+                    
+                    if st.button("🖨️ Direct Print via Printer", type="primary"):
+                        html(print_script_html, height=120)
+                        st.success("✅ Print dialog trigger ho gaya hai!")
 
-                from streamlit.components.v1 import html
-                if st.button("🖨️ Print This Sticker Now", type="primary"):
-                    html(print_html, height=100)
-                    st.success("✅ Print dialog open ho gaya hai! Aap direct print le sakte hain.")
+                st.info("💡 **Dono Options Available Hain:** Computer mein save karne ke liye 'Download to Computer' dabayein, aur bina jhanjhat direct printer se nikalne ke liye 'Direct Print via Printer' dabayein!")
 
             except Exception as e:
                 st.error(f"Error: {e}")
@@ -661,7 +679,7 @@ else:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
                             st.image(ex_img_io, width=280)
                             st.download_button(
-                                label="💾 Download Device File",
+                                label="💾 Download Sticker PNG",
                                 data=ex_img_io,
                                 file_name=f"{clean_name}_{ex_barcode}.png",
                                 mime="image/png"
