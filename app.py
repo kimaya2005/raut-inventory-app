@@ -123,6 +123,28 @@ def log_activity(username, action_type, details):
     except Exception:
         pass
 
+def record_download_history(item_name, barcode_id, username):
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(
+            "SELECT price, slot_category FROM inventory WHERE barcode_id = ?",
+            (barcode_id,)
+        )
+        res = c.fetchone()
+        price = res[0] if res else ""
+        slot = res[1] if res else ""
+        
+        c.execute(
+            "INSERT INTO downloaded_history (item_name, barcode_id, price, slot_category, downloaded_by) VALUES (?, ?, ?, ?, ?)",
+            (item_name, barcode_id, price, slot, username)
+        )
+        conn.commit()
+        conn.close()
+        log_activity(username, "DOWNLOAD_PRINT_STICKER", f"Downloaded/Printed sticker for {item_name} ({barcode_id}).")
+    except Exception:
+        pass
+
 # Helper function: Optimized for 50mm x 37mm thermal stickers with larger product name
 def generate_custom_barcode_image(item_name, barcode_text):
     scale = 3  
@@ -396,30 +418,20 @@ else:
                     
                     with col1:
                         if st.button(f"📥 Save to App History", key=f"save_app_{item_id}"):
-                            try:
-                                conn = get_db_connection()
-                                c = conn.cursor()
-                                c.execute(
-                                    "INSERT INTO downloaded_history (item_name, barcode_id, price, slot_category, downloaded_by) VALUES (?, ?, ?, ?, ?)",
-                                    (item_name, barcode_id, price, slot_category, st.session_state.username)
-                                )
-                                conn.commit()
-                                conn.close()
-                                log_activity(st.session_state.username, "SAVE_HISTORY", f"Saved barcode for {item_name} to history.")
-                                st.success(f"✅ App History mein save ho gaya!")
-                            except Exception as e:
-                                st.error(f"Error: {e}")
+                            record_download_history(item_name, barcode_id, st.session_state.username)
+                            st.success(f"✅ App History mein save ho gaya!")
 
                     with col2:
                         try:
                             local_img_io = generate_custom_barcode_image(item_name, barcode_id)
-                            st.download_button(
+                            if st.download_button(
                                 label="💾 Download PNG File",
                                 data=local_img_io,
                                 file_name=f"{item_name}_{barcode_id}.png",
                                 mime="image/png",
                                 key=f"download_device_{item_id}"
-                            )
+                            ):
+                                record_download_history(item_name, barcode_id, st.session_state.username)
                         except Exception as e:
                             st.error(f"Download error: {e}")
 
@@ -453,13 +465,14 @@ else:
                 col_opt1, col_opt2 = st.columns(2)
                 
                 with col_opt1:
-                    st.download_button(
+                    if st.download_button(
                         label="💾 Download to Computer",
                         data=single_img_io,
                         file_name=f"Sticker_{p_name}_{p_barcode}.png",
                         mime="image/png",
                         type="secondary"
-                    )
+                    ):
+                        record_download_history(p_name, p_barcode, st.session_state.username)
                 
                 with col_opt2:
                     img_bytes = single_img_io.getvalue()
@@ -486,18 +499,19 @@ else:
                     """
                     
                     if st.button("🖨️ Direct Print via Printer", type="primary"):
+                        record_download_history(p_name, p_barcode, st.session_state.username)
                         html(print_script_html, height=120)
-                        st.success("✅ Print dialog trigger ho gaya hai!")
+                        st.success("✅ Print dialog trigger ho gaya hai aur history mein record ho gaya hai!")
 
-                st.info("💡 **Dono Options Available Hain:** Computer mein safe rakhne ke liye 'Download to Computer' use karein, aur turant printer se nikalne ke liye 'Direct Print via Printer' dabayein!")
+                st.info("💡 **Dono Options Available Hain:** Computer mein save karne ke liye 'Download to Computer' use karein, aur turant printer se nikalne ke liye 'Direct Print via Printer' dabayein! Saari activity history mein save hogi.")
 
             except Exception as e:
                 st.error(f"Error: {e}")
 
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
-        st.title("📂 App Downloaded History (Shared with Employees)")
-        st.write("Yahan aap aur aapke employees dekh sakte hain ki kaunse barcodes app ke andar save kiye gaye hain.")
+        st.title("📂 App Downloaded & Printed History")
+        st.write("Yahan aap aur aapke employees dekh sakte hain ki kisne kaunsa barcode download ya print kiya hai.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -508,7 +522,7 @@ else:
         conn.close()
 
         if history_df.empty:
-            st.info("Abhi tak app ke andar koi barcode save nahi kiya gaya hai.")
+            st.info("Abhi tak app ke andar koi barcode download ya print nahi kiya gaya hai.")
         else:
             hist_csv = history_df.to_csv(index=False).encode('utf-8')
             st.download_button(
@@ -531,7 +545,7 @@ else:
                 with st.container():
                     st.markdown(f"### 📦 Product: **{h_name}**")
                     st.write(f"**Barcode ID:** `{h_barcode}` | **Price:** {h_price or 'N/A'} | **Slot/Cat:** {h_slot or 'N/A'}")
-                    st.caption(f"Saved by user: **{h_user}** at {h_time}")
+                    st.caption(f"Action performed by user: **{h_user}** at {h_time}")
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode)
@@ -677,12 +691,13 @@ else:
                         try:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
                             st.image(ex_img_io, width=320)
-                            st.download_button(
+                            if st.download_button(
                                 label="💾 Download Sticker PNG",
                                 data=ex_img_io,
                                 file_name=f"{clean_name}_{ex_barcode}.png",
                                 mime="image/png"
-                            )
+                            ):
+                                record_download_history(clean_name, ex_barcode, st.session_state.username)
                         except Exception as e:
                             st.error(f"Error rendering barcode: {e}")
                     else:
