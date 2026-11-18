@@ -121,7 +121,7 @@ def log_activity(username, action_type, details):
     except Exception:
         pass
 
-# Helper function: Optimized for 38mm x 25mm thermal stickers
+# Helper function: Optimized compact sticker generator
 def generate_custom_barcode_image(item_name, barcode_text):
     scale = 2  
     
@@ -279,7 +279,6 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Print Thermal Sticker (38x25mm)",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "📜 Activity Audit Logs",
@@ -294,7 +293,6 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Print Thermal Sticker (38x25mm)",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "➕ Generate & Save Barcode", 
@@ -346,10 +344,10 @@ else:
         else:
             st.info("Export karne ke liye inventory mein koi items nahi hain.")
 
-    # --- SECTION 1: APP STORAGE WITH SEARCH BAR & BULK EXPORT ---
+    # --- SECTION 1: APP STORAGE WITH SEARCH BAR & 1-CLICK DOWNLOAD ---
     elif menu == "📦 App Barcode Storage":
-        st.title("📦 App Central Barcode Storage")
-        st.write("Yahan saare saved barcodes 100% scanner-friendly pure numeric format mein hain.")
+        st.title("📦 App Central Barcode Storage (38x25mm Stickers)")
+        st.write("Yahan se aap kisi bhi product ka exact single sticker download karke turant print kar sakte hain.")
         st.markdown("---")
 
         search_query = st.text_input("🔍 Search Products (Type Item Name or Barcode ID)...", "").strip().lower()
@@ -365,7 +363,7 @@ else:
         if df.empty:
             st.info("Koi matching barcode nahi mila.")
         else:
-            col_exp1, col_exp2 = st.columns(2)
+            col_exp1, _ = st.columns(2)
             with col_exp1:
                 csv_data = df.to_csv(index=False).encode('utf-8')
                 st.download_button(
@@ -412,7 +410,7 @@ else:
                         try:
                             local_img_io = generate_custom_barcode_image(item_name, barcode_id)
                             st.download_button(
-                                label="💾 Download to Device",
+                                label="🖨️ Download Single Sticker (38x25mm)",
                                 data=local_img_io,
                                 file_name=f"{item_name}_{barcode_id}.png",
                                 mime="image/png",
@@ -422,51 +420,6 @@ else:
                             st.error(f"Download error: {e}")
 
                     st.caption(f"Record ID: #{item_id} | Price: {price or 'N/A'} | Slot/Cat: {slot_category or 'N/A'}")
-                    st.markdown("---")
-
-    # --- SECTION 1.5: PRINT 38x25mm THERMAL STICKER ---
-    elif menu == "🖨️ Print Thermal Sticker (38x25mm)":
-        st.title("🖨️ 38mm x Thermal Sticker Direct Print")
-        st.write("Yahan se aap exact 38mm x 25mm size mein stickers print kar sakte hain.")
-        st.markdown("---")
-
-        # Inject CSS to force 38mm x 25mm thermal label printing layout
-        st.markdown(
-            """
-            <style>
-            @media print {
-                body { visibility: hidden; }
-                #printable-sticker-area, #printable-sticker-area * { visibility: visible; }
-                #printable-sticker-area { position: absolute; left: 0; top: 0; width: 38mm; height: 25mm; }
-                @page { size: 38mm 25mm; margin: 0; }
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
-        conn = get_db_connection()
-        sheet_df = pd.read_sql_query("SELECT id, item_name, barcode_id FROM inventory ORDER BY id DESC", conn)
-        conn.close()
-
-        if sheet_df.empty:
-            st.info("Print karne ke liye koi products nahi hain.")
-        else:
-            st.success("🎯 **Ready for 38mm x 25mm Thermal Printing!** Neeche diye gaye button par click karein ya **Ctrl + P** dabayein.")
-            
-            for _, row in sheet_df.iterrows():
-                i_name = row['item_name']
-                i_barcode = row['barcode_id']
-                
-                with st.container():
-                    st.markdown(f"### 🏷️ Product: {i_name.upper()}")
-                    try:
-                        sticker_io = generate_custom_barcode_image(i_name, i_barcode)
-                        st.image(sticker_io, width=260)
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                    
-                    st.info(f"Barcode ID: `{i_barcode}` | Size: 38mm x 25mm")
                     st.markdown("---")
 
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
@@ -653,7 +606,7 @@ else:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
                             st.image(ex_img_io, width=280)
                             st.download_button(
-                                label="💾 Download Existing Barcode to Device",
+                                label="🖨️ Download Single Sticker (38x25mm)",
                                 data=ex_img_io,
                                 file_name=f"{clean_name}_{ex_barcode}.png",
                                 mime="image/png"
