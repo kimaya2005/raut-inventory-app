@@ -123,17 +123,17 @@ def log_activity(username, action_type, details):
     except Exception:
         pass
 
-# Helper function: Optimized compact sticker generator for 38x25mm
+# Helper function: Optimized for 50mm x 37mm thermal stickers with larger product name
 def generate_custom_barcode_image(item_name, barcode_text):
-    scale = 2  
+    scale = 3  
     
     writer_options = {
-        'module_width': 0.30 * scale,
-        'module_height': 12.0 * scale,
-        'quiet_zone': 6 * scale,
+        'module_width': 0.35 * scale,
+        'module_height': 16.0 * scale,
+        'quiet_zone': 8 * scale,
         'write_text': True,
-        'font_size': 12 * scale,
-        'text_distance': 5.0 * scale
+        'font_size': 14 * scale,
+        'text_distance': 6.0 * scale
     }
 
     rv = BytesIO()
@@ -143,8 +143,8 @@ def generate_custom_barcode_image(item_name, barcode_text):
     barcode_img = Image.open(rv)
     bw, bh = barcode_img.size
     
-    header_height = 55 * scale
-    sticker_width = max(bw + 30 * scale, 380 * scale)
+    header_height = 90 * scale
+    sticker_width = max(bw + 40 * scale, 520 * scale)
     sticker_height = bh + header_height
     
     sticker_img = Image.new("RGB", (sticker_width, sticker_height), "white")
@@ -161,22 +161,22 @@ def generate_custom_barcode_image(item_name, barcode_text):
     
     for path in font_paths:
         try:
-            font_title = ImageFont.truetype(path, 22 * scale)
+            font_title = ImageFont.truetype(path, 34 * scale)
             break
         except IOError:
             continue
             
     if not font_title:
         try:
-            font_title = ImageFont.load_default(size=22 * scale)
+            font_title = ImageFont.load_default(size=34 * scale)
         except TypeError:
             font_title = ImageFont.load_default()
 
-    draw.text((20 * scale, 15 * scale), f"{item_name.upper()}", fill="black", font=font_title)
+    draw.text((25 * scale, 20 * scale), f"{item_name.upper()}", fill="black", font=font_title)
     
-    current_y = 45 * scale
-    draw.line([(20 * scale, current_y), (sticker_width - 20 * scale, current_y)], fill="black", width=2 * scale)
-    current_y += 10 * scale
+    current_y = 70 * scale
+    draw.line([(25 * scale, current_y), (sticker_width - 25 * scale, current_y)], fill="black", width=3 * scale)
+    current_y += 15 * scale
     
     x_offset = max(0, (sticker_width - bw) // 2)
     sticker_img.paste(barcode_img, (x_offset, current_y))
@@ -281,7 +281,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Direct Print / Download 38x25mm",
+                "🖨️ Direct Print / Download 50x37mm",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "📜 Activity Audit Logs",
@@ -296,7 +296,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
-                "🖨️ Direct Print / Download 38x25mm",
+                "🖨️ Direct Print / Download 50x37mm",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "➕ Generate & Save Barcode", 
@@ -388,7 +388,7 @@ else:
                 with st.container():
                     try:
                         custom_barcode_io = generate_custom_barcode_image(item_name, barcode_id)
-                        st.image(custom_barcode_io, width=280)
+                        st.image(custom_barcode_io, width=320)
                     except Exception as e:
                         st.error(f"Barcode render error: {e}")
 
@@ -426,10 +426,10 @@ else:
                     st.caption(f"Record ID: #{item_id} | Price: {price or 'N/A'} | Slot/Cat: {slot_category or 'N/A'}")
                     st.markdown("---")
 
-    # --- SECTION 1.5: DIRECT PRINT & DOWNLOAD 38x25mm STICKER ---
-    elif menu == "🖨️ Direct Print / Download 38x25mm":
-        st.title("🖨️ Direct Print & Download 38x25mm Thermal Sticker")
-        st.write("Yahan aapke paas dono options hain: Direct Printer se instant print lijiye ya computer mein PNG file download kijiye.")
+    # --- SECTION 1.5: DIRECT PRINT & DOWNLOAD 50x37mm STICKER ---
+    elif menu == "🖨️ Direct Print / Download 50x37mm":
+        st.title("🖨️ Direct Print & Download 50mm x 37mm Thermal Sticker")
+        st.write("Yahan se aap exact 50mm x 37mm size mein sticker download ya direct print kar sakte hain.")
         st.markdown("---")
 
         conn = get_db_connection()
@@ -443,14 +443,13 @@ else:
             selected_p_str = st.selectbox("Select Product", list(item_dict_p.keys()))
             p_name, p_barcode = item_dict_p[selected_p_str]
 
-            st.markdown("### 🏷️ Sticker Preview (38mm x 25mm)")
+            st.markdown("### 🏷️ Sticker Preview (50mm x 37mm)")
             try:
                 single_img_io = generate_custom_barcode_image(p_name, p_barcode)
-                st.image(single_img_io, width=300)
+                st.image(single_img_io, width=320)
                 
                 st.markdown("---")
                 
-                # Two distinct columns for Download and Direct Print options
                 col_opt1, col_opt2 = st.columns(2)
                 
                 with col_opt1:
@@ -470,9 +469,9 @@ else:
                     <html>
                     <head>
                         <style>
-                            @page {{ size: 38mm 25mm; margin: 0; }}
+                            @page {{ size: 50mm 37mm; margin: 0; }}
                             body {{ margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: white; }}
-                            img {{ width: 38mm; height: 25mm; object-fit: contain; }}
+                            img {{ width: 50mm; height: 37mm; object-fit: contain; }}
                         </style>
                     </head>
                     <body>
@@ -490,7 +489,7 @@ else:
                         html(print_script_html, height=120)
                         st.success("✅ Print dialog trigger ho gaya hai!")
 
-                st.info("💡 **Dono Options Available Hain:** Computer mein save karne ke liye 'Download to Computer' dabayein, aur bina jhanjhat direct printer se nikalne ke liye 'Direct Print via Printer' dabayein!")
+                st.info("💡 **Dono Options Available Hain:** Computer mein safe rakhne ke liye 'Download to Computer' use karein, aur turant printer se nikalne ke liye 'Direct Print via Printer' dabayein!")
 
             except Exception as e:
                 st.error(f"Error: {e}")
@@ -536,7 +535,7 @@ else:
                     
                     try:
                         custom_io = generate_custom_barcode_image(h_name, h_barcode)
-                        st.image(custom_io, width=260)
+                        st.image(custom_io, width=280)
                     except Exception:
                         pass
                     
@@ -571,7 +570,7 @@ else:
 
                     try:
                         custom_io = generate_custom_barcode_image(t_name, t_barcode)
-                        st.image(custom_io, width=260)
+                        st.image(custom_io, width=280)
                     except Exception:
                         pass
 
@@ -677,7 +676,7 @@ else:
                         
                         try:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
-                            st.image(ex_img_io, width=280)
+                            st.image(ex_img_io, width=320)
                             st.download_button(
                                 label="💾 Download Sticker PNG",
                                 data=ex_img_io,
