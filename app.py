@@ -121,7 +121,7 @@ def log_activity(username, action_type, details):
     except Exception:
         pass
 
-# Helper function: Optimized compact sticker generator
+# Helper function: Optimized compact sticker generator for 38x25mm
 def generate_custom_barcode_image(item_name, barcode_text):
     scale = 2  
     
@@ -279,6 +279,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
+                "🖨️ Direct Print 38x25mm Sticker",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "📜 Activity Audit Logs",
@@ -293,6 +294,7 @@ else:
             [
                 "📊 Inventory Dashboard",
                 "📦 App Barcode Storage", 
+                "🖨️ Direct Print 38x25mm Sticker",
                 "📂 App Downloaded History", 
                 "♻️ Trash / Bin Folder", 
                 "➕ Generate & Save Barcode", 
@@ -344,10 +346,10 @@ else:
         else:
             st.info("Export karne ke liye inventory mein koi items nahi hain.")
 
-    # --- SECTION 1: APP STORAGE WITH SEARCH BAR & 1-CLICK DOWNLOAD ---
+    # --- SECTION 1: APP STORAGE WITH SEARCH BAR ---
     elif menu == "📦 App Barcode Storage":
-        st.title("📦 App Central Barcode Storage (38x25mm Stickers)")
-        st.write("Yahan se aap kisi bhi product ka exact single sticker download karke turant print kar sakte hain.")
+        st.title("📦 App Central Barcode Storage")
+        st.write("Yahan saare saved barcodes 100% scanner-friendly pure numeric format mein hain.")
         st.markdown("---")
 
         search_query = st.text_input("🔍 Search Products (Type Item Name or Barcode ID)...", "").strip().lower()
@@ -410,7 +412,7 @@ else:
                         try:
                             local_img_io = generate_custom_barcode_image(item_name, barcode_id)
                             st.download_button(
-                                label="🖨️ Download Single Sticker (38x25mm)",
+                                label="💾 Download Device File",
                                 data=local_img_io,
                                 file_name=f"{item_name}_{barcode_id}.png",
                                 mime="image/png",
@@ -421,6 +423,59 @@ else:
 
                     st.caption(f"Record ID: #{item_id} | Price: {price or 'N/A'} | Slot/Cat: {slot_category or 'N/A'}")
                     st.markdown("---")
+
+    # --- SECTION 1.5: DIRECT PRINT 38x25mm STICKER ---
+    elif menu == "🖨️ Direct Print 38x25mm Sticker":
+        st.title("🖨️ Direct Print 38x25mm Thermal Sticker")
+        st.write("Yahan se aap kisi bhi 1 product ka exact single sticker browser print dialog ke zariye direct print kar sakte hain (No Paper Waste).")
+        st.markdown("---")
+
+        conn = get_db_connection()
+        p_df = pd.read_sql_query("SELECT id, item_name, barcode_id FROM inventory ORDER BY id DESC", conn)
+        conn.close()
+
+        if p_df.empty:
+            st.info("Print karne ke liye koi products nahi hain.")
+        else:
+            item_dict_p = {f"{row['item_name'].upper()} (ID: {row['barcode_id']})": (row['item_name'], row['barcode_id']) for _, row in p_df.iterrows()}
+            selected_p_str = st.selectbox("Select Product to Print", list(item_dict_p.keys()))
+            p_name, p_barcode = item_dict_p[selected_p_str]
+
+            st.markdown("### 🏷️ Sticker Preview (38mm x 25mm)")
+            try:
+                single_img_io = generate_custom_barcode_image(p_name, p_barcode)
+                st.image(single_img_io, width=300)
+                
+                # Convert image to base64 for direct browser window printing
+                import base64
+                img_bytes = single_img_io.getvalue()
+                encoded_img = base64.b64encode(img_bytes).decode('utf-8')
+
+                print_html = f"""
+                <html>
+                <head>
+                    <style>
+                        @page {{ size: 38mm 25mm; margin: 0; }}
+                        body {{ margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: white; }}
+                        img {{ width: 38mm; height: 25mm; object-fit: contain; }}
+                    </style>
+                </head>
+                <body>
+                    <img src="data:image/png;base64,{encoded_img}" />
+                    <script>
+                        window.onload = function() {{ window.print(); }}
+                    </script>
+                </body>
+                </html>
+                """
+
+                from streamlit.components.v1 import html
+                if st.button("🖨️ Print This Sticker Now", type="primary"):
+                    html(print_html, height=100)
+                    st.success("✅ Print dialog open ho gaya hai! Aap direct print le sakte hain.")
+
+            except Exception as e:
+                st.error(f"Error: {e}")
 
     # --- SECTION 2: APP DOWNLOADED HISTORY ---
     elif menu == "📂 App Downloaded History":
@@ -606,7 +661,7 @@ else:
                             ex_img_io = generate_custom_barcode_image(clean_name, ex_barcode)
                             st.image(ex_img_io, width=280)
                             st.download_button(
-                                label="🖨️ Download Single Sticker (38x25mm)",
+                                label="💾 Download Device File",
                                 data=ex_img_io,
                                 file_name=f"{clean_name}_{ex_barcode}.png",
                                 mime="image/png"
