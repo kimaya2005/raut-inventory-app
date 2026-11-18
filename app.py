@@ -145,7 +145,7 @@ def record_download_history(item_name, barcode_id, username):
     except Exception:
         pass
 
-# Helper function: Optimized for 50mm x 37mm thermal stickers with larger product name
+# Helper function: Optimized for 50mm x 37mm thermal stickers with CENTERED product name
 def generate_custom_barcode_image(item_name, barcode_text):
     scale = 3  
     
@@ -183,18 +183,25 @@ def generate_custom_barcode_image(item_name, barcode_text):
     
     for path in font_paths:
         try:
-            font_title = ImageFont.truetype(path, 34 * scale)
+            font_title = ImageFont.truetype(path, 32 * scale)
             break
         except IOError:
             continue
             
     if not font_title:
         try:
-            font_title = ImageFont.load_default(size=34 * scale)
+            font_title = ImageFont.load_default(size=32 * scale)
         except TypeError:
             font_title = ImageFont.load_default()
 
-    draw.text((25 * scale, 20 * scale), f"{item_name.upper()}", fill="black", font=font_title)
+    # Calculate exact center for the product name text
+    text_to_draw = f"{item_name.upper()}"
+    bbox = draw.textbbox((0, 0), text_to_draw, font=font_title)
+    text_w = bbox[2] - bbox[0]
+    text_x = (sticker_width - text_w) // 2
+    text_y = 22 * scale
+
+    draw.text((text_x, text_y), text_to_draw, fill="black", font=font_title)
     
     current_y = 70 * scale
     draw.line([(25 * scale, current_y), (sticker_width - 25 * scale, current_y)], fill="black", width=3 * scale)
@@ -455,7 +462,7 @@ else:
             selected_p_str = st.selectbox("Select Product", list(item_dict_p.keys()))
             p_name, p_barcode = item_dict_p[selected_p_str]
 
-            st.markdown("### 🏷️ Sticker Preview (50mm x 37mm)")
+            st.markdown("### 🏷️ Sticker Preview (50mm x 37mm - Centered Name)")
             try:
                 single_img_io = generate_custom_barcode_image(p_name, p_barcode)
                 st.image(single_img_io, width=320)
@@ -503,7 +510,7 @@ else:
                         html(print_script_html, height=120)
                         st.success("✅ Print dialog trigger ho gaya hai aur history mein record ho gaya hai!")
 
-                st.info("💡 **Dono Options Available Hain:** Computer mein save karne ke liye 'Download to Computer' use karein, aur turant printer se nikalne ke liye 'Direct Print via Printer' dabayein! Saari activity history mein save hogi.")
+                st.info("💡 **Note:** Product name ab bilkul center mein aayega!")
 
             except Exception as e:
                 st.error(f"Error: {e}")
